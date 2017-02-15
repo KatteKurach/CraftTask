@@ -4,7 +4,7 @@ import csv
 import urllib.robotparser as pr
 import threading
 import Queue
-
+import time
 
 class Task(object):
     def __init__(self, func, args):
@@ -31,19 +31,43 @@ def readQueueFromFile(filename, queue):
             queue.put(Task(processUrl, [line[0]])
 
 
-def writeLine(writer, line):
-    pass
+def writeLine(writer, line, writerLock):
+    writerLock.acquire()
+    writer.writerow(line)
+    writerLock.release()
 
 
-def getCrawlDelay(url):
-    pass
+def getDelay(url):
+    return 0.1 
 
-def threadLoop(queue, condition, writer, writerLock):
-    pass
+
+def threadLoop(queue, delayCondition, writer, writerLock):
+    while True:
+        task = queue.get()
+        if task is None:
+            break
+
+        task.args.append(writer, writerLock)
+        delayCondition.wait()
+        delayCondition.acquire()
+        task.run()
+        delayCondition.release()
+        
+        
+def allPoisoned(threads):
+    for thread in threads:
+        if thread.is_Alive():
+            return False
+    return True
+
 
 def delayLoop(delayCondition, delay, threads):
-    pass
-
+    while True:
+        if allPoisoned(threads):
+            break
+        delayCondition.notify()
+        time.sleep(delay)
+        
 
 def main():
     inputFile = 'wikipedia_links.csv' 
@@ -66,6 +90,7 @@ def main():
     delayManager.start()
 
     getQueueFromFile(inputFile, queue)
+    addPoisonPill(queue, threadCount)
     delayManager.join()
     f.close()
 
